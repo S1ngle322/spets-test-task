@@ -10,7 +10,7 @@ const config: Config = {
     password: 'postgres',
     database: 'balance_app',
     host: 'localhost',
-    dialect: 'postgres',
+    dialect: 'postgres'
   }
 }
 

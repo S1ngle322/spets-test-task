@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "start": "node ./bin/www"
+    "start": "npx tsc && node dist/server.js\n",
+    "prettier": "prettier --write \"src/**/*.ts\"",
+    "test-balance": "npx ts-node ./src/scripts/update-balance-test.script.ts"
   },
   "dependencies": {
     "@types/umzug": "^2.3.9",
@@ -14,6 +16,7 @@
     "http-errors": "~1.6.3",
     "morgan": "~1.9.1",
     "pg": "^8.16.0",
+    "prettier": "^3.5.3",
     "pug": "2.0.0-beta11",
     "sequelize": "^6.37.7",
     "umzug": "^3.8.2"

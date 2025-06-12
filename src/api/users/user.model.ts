@@ -1,10 +1,10 @@
 import { Model, DataTypes, Sequelize } from 'sequelize'
 
 class UserModel extends Model {
-  public id!: number;
-  public balance!: number;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
+  public id!: number
+  public balance!: number
+  public readonly createdAt!: Date
+  public readonly updatedAt!: Date
 
   public static initModel(sequelize: Sequelize) {
     UserModel.init(
@@ -14,14 +14,14 @@ class UserModel extends Model {
           allowNull: false,
           defaultValue: 0,
           validate: {
-            min: 0,
-          },
-        },
+            min: 0
+          }
+        }
       },
       {
         sequelize,
         modelName: 'UserModel',
-        tableName: 'Users',
+        tableName: 'Users'
       }
     )
     return UserModel

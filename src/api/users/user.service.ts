@@ -8,10 +8,13 @@ class UsersService {
     try {
       const result = await sequelize.transaction(
         {
-          isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE,
+          isolationLevel: Transaction.ISOLATION_LEVELS.READ_COMMITTED
         },
-        async (transaction) => {
-          const user = await User.findByPk(data.userId, { transaction: transaction })
+        async transaction => {
+          const user = await User.findByPk(data.userId, {
+            transaction: transaction,
+            attributes: ['balance', 'id']
+          })
 
           if (!user) {
             throw new Error('User not found')
@@ -31,18 +34,14 @@ class UsersService {
 
       return {
         success: true,
-        balance: result.balance,
+        balance: result.balance
       }
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : 'Unknown error'
       }
     }
-  }
-
-  public async getUserById(id: number): Promise<User | null> {
-    return User.findByPk(id)
   }
 }
 
