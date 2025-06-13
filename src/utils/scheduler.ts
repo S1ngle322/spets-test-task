@@ -151,17 +151,13 @@ export default class DistributedScheduler {
     const task = await Task.findOne({
       where: {
         nextRun: { [Op.lte]: now },
-        [Op.or]: [
-          { lockedUntil: null },
-          { lockedUntil: { [Op.lte]: now } }
-        ]
+        [Op.or]: [{ lockedUntil: null }, { lockedUntil: { [Op.lte]: now } }]
       },
       order: [['next_run', 'ASC']],
       lock: true,
       skipLocked: true,
       transaction
     })
-
 
     if (task) {
       // Обновить поля блокировки и вернуть обновлённую задачу
