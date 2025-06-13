@@ -9,8 +9,8 @@ import { setInterval } from 'timers/promises'
 const SCHEDULER_CONFIG = {
   checkInterval: 1000, // Проверка задач каждую секунду
   taskTimeout: 300000, // 5 минут на выполнение задачи
-  lockDuration: 60000, // Блокировка на 1 минуту
-  staleTaskCheckInterval: 60000 // Проверка зависших задач каждую минуту
+  lockDuration: 600000, // Блокировка на 1 минуту
+  staleTaskCheckInterval: 660000 // Проверка зависших задач каждую минуту
 }
 
 // Функции задач (пример)
@@ -25,15 +25,15 @@ const TASK_FUNCTIONS: Record<string, () => Promise<void>> = {
   },
   databaseBackup: async () => {
     console.log('Backup database...')
-    await new Promise(resolve => setTimeout(resolve, 200000)) // 3.3
+    await new Promise(resolve => setTimeout(resolve, 200000)) // 3.3 минуты
   },
   calculateFee: async () => {
     console.log('Calculate fee...')
-    await new Promise(resolve => setTimeout(resolve, 280000)) // 4
+    await new Promise(resolve => setTimeout(resolve, 280000)) // 4 минуты
   },
   clearMiners: async () => {
     console.log('Clear miners...')
-    await new Promise(resolve => setTimeout(resolve, 380000)) // 4
+    await new Promise(resolve => setTimeout(resolve, 380000)) // 5.2 минуты
   }
 }
 
@@ -135,7 +135,6 @@ export default class DistributedScheduler {
       },
       {
         where: {
-          lockedBy: this.serverId,
           lockedUntil: { [Op.lt]: now }
         },
         transaction
@@ -148,6 +147,9 @@ export default class DistributedScheduler {
     }
 
     // Пытаемся захватить новую задачу
+    // Если задача заблокирована и у неё запуск следующий в определенное время раньше, чем спадёт блокировка
+    // То задача не запустится
+    // Лок снимается, если задача зависла
     const task = await Task.findOne({
       where: {
         nextRun: { [Op.lte]: now },
@@ -186,7 +188,7 @@ export default class DistributedScheduler {
           serverId: this.serverId,
           startTime: new Date(),
           status: 'running',
-          functionName: task.functionName // Исправлено: task.functionName вместо taskFunction.name
+          functionName: task.functionName
         },
         { transaction }
       )
