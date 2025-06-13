@@ -39,8 +39,8 @@ async function initializeDatabase() {
     Task.initModel(sequelize)
     TaskHistory.initModel(sequelize)
 
-    Task.hasMany(TaskHistory, { foreignKey: 'taskId' })
-    TaskHistory.belongsTo(Task, { foreignKey: 'taskId' })
+    Task.hasMany(TaskHistory, { foreignKey: 'task_id' })
+    TaskHistory.belongsTo(Task, { foreignKey: 'task_id' })
   } catch (error) {
     console.error('Unable to connect to the database:', error)
     process.exit(1)
@@ -60,6 +60,7 @@ async function start() {
   })
 
   const scheduler = new DistributedScheduler()
+  await scheduler.initializeTasks()
   await scheduler.start()
   console.log('Tasks scheduler initialized')
 }

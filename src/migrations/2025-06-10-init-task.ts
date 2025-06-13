@@ -18,42 +18,48 @@ module.exports = {
       },
       lastRun: {
         type: DataTypes.DATE,
-        allowNull: true
+        allowNull: true,
+        field: 'last_run'
       },
       nextRun: {
         type: DataTypes.DATE,
-        allowNull: false
+        allowNull: false,
+        field: 'next_run'
       },
       lockedUntil: {
         type: DataTypes.DATE,
-        allowNull: true
+        allowNull: true,
+        field: 'locked_until'
       },
       lockedBy: {
         type: DataTypes.STRING,
-        allowNull: true
+        allowNull: true,
+        field: 'locked_by'
       },
       functionName: {
         type: DataTypes.STRING,
-        allowNull: false
+        allowNull: false,
+        field: 'function_name'
       },
       createdAt: {
         type: DataTypes.DATE,
         allowNull: false,
-        defaultValue: queryInterface.sequelize.literal('CURRENT_TIMESTAMP')
+        defaultValue: queryInterface.sequelize.literal('CURRENT_TIMESTAMP'),
+        field: 'created_at'
       },
       updatedAt: {
         type: DataTypes.DATE,
         allowNull: false,
-        defaultValue: queryInterface.sequelize.literal('CURRENT_TIMESTAMP')
+        defaultValue: queryInterface.sequelize.literal('CURRENT_TIMESTAMP'),
+        field: 'updated_at'
       }
     })
 
     await queryInterface.sequelize.query(`
-        CREATE INDEX "tasks_nextRun_lockedUntil_index"
-            ON "tasks" ("nextRun", "lockedUntil") WHERE "lockedUntil" IS NULL;
+        CREATE INDEX "tasks_next_run_locked_until_index"
+            ON "tasks" ("next_run", "locked_until") WHERE "locked_until" IS NULL;
     `)
 
-    // Create task_history table
     await queryInterface.createTable('task_history', {
       id: {
         type: DataTypes.INTEGER,
@@ -67,23 +73,28 @@ module.exports = {
           model: 'tasks',
           key: 'id'
         },
-        onDelete: 'CASCADE'
+        onDelete: 'CASCADE',
+        field: 'task_id'
       },
       serverId: {
         type: DataTypes.STRING,
-        allowNull: false
+        allowNull: false,
+        field: 'server_id'
       },
       functionName: {
         type: DataTypes.STRING,
-        allowNull: false
+        allowNull: false,
+        field: 'function_name'
       },
       startTime: {
         type: DataTypes.DATE,
-        allowNull: false
+        allowNull: false,
+        field: 'start_time'
       },
       endTime: {
         type: DataTypes.DATE,
-        allowNull: true
+        allowNull: true,
+        field: 'end_time'
       },
       status: {
         type: DataTypes.ENUM('pending', 'running', 'completed', 'failed', 'timeout'),
@@ -96,29 +107,34 @@ module.exports = {
       durationMs: {
         type: DataTypes.INTEGER,
         allowNull: true,
-        comment: 'Duration in milliseconds'
+        comment: 'Duration in milliseconds',
+        field: 'duration_ms'
       },
       createdAt: {
         type: DataTypes.DATE,
         allowNull: false,
-        defaultValue: queryInterface.sequelize.literal('CURRENT_TIMESTAMP')
+        defaultValue: queryInterface.sequelize.literal('CURRENT_TIMESTAMP'),
+        field: 'created_at'
       },
       updatedAt: {
         type: DataTypes.DATE,
         allowNull: false,
-        defaultValue: queryInterface.sequelize.literal('CURRENT_TIMESTAMP')
+        defaultValue: queryInterface.sequelize.literal('CURRENT_TIMESTAMP'),
+        field: 'updated_at'
       }
     })
 
-    await queryInterface.addIndex('task_history', ['taskId'])
+    await queryInterface.addIndex('task_history', ['task_id'])
     await queryInterface.addIndex('task_history', ['status'])
-    await queryInterface.addIndex('task_history', ['serverId'])
-    await queryInterface.addIndex('task_history', ['createdAt'])
+    await queryInterface.addIndex('task_history', ['server_id'])
+    await queryInterface.addIndex('task_history', ['created_at'])
   },
 
   down: async (queryInterface: QueryInterface) => {
     await queryInterface.dropTable('task_history')
-    await queryInterface.sequelize.query('DROP INDEX IF EXISTS "tasks_nextRun_lockedUntil_index";')
+    await queryInterface.sequelize.query(
+      'DROP INDEX IF EXISTS "tasks_next_run_locked_until_index";'
+    )
     await queryInterface.dropTable('tasks')
     await queryInterface.sequelize.query(`DROP TYPE IF EXISTS "enum_task_history_status";`)
   }

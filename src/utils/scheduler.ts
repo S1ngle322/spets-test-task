@@ -2,7 +2,7 @@ import { Op, Transaction } from 'sequelize'
 import { sequelize } from '../server'
 import Task from '../api/tasks/task.model'
 import TaskHistory from '../api/tasks/task-history.model'
-import { performance } from 'perf_hooks'
+import { CronExpressionParser } from 'cron-parser'
 import { setInterval } from 'timers/promises'
 
 // Конфиг планировщика
@@ -13,36 +13,8 @@ const SCHEDULER_CONFIG = {
   staleTaskCheckInterval: 60000 // Проверка зависших задач каждую минуту
 }
 
-// const TASK_FUNCTIONS: Record<string, () => Promise<void>> = {
-//   task1: async () => {
-//     console.log('Running task1')
-//     await new Promise(resolve => setTimeout(resolve, 120000)) // 2 минуты
-//     console.log('Completed task1')
-//   },
-//   task2: async () => {
-//     console.log('Running task2')
-//     await new Promise(resolve => setTimeout(resolve, 130000)) // 2.16 минуты
-//     console.log('Completed task2')
-//   },
-//   task3: async () => {
-//     console.log('Running task3')
-//     await new Promise(resolve => setTimeout(resolve, 125000)) // 2.08 минуты
-//     console.log('Completed task3')
-//   },
-//   task4: async () => {
-//     console.log('Running task4')
-//     await new Promise(resolve => setTimeout(resolve, 135000)) // 2.25 минуты
-//     console.log('Completed task4')
-//   },
-//   task5: async () => {
-//     console.log('Running task5')
-//     await new Promise(resolve => setTimeout(resolve, 140000)) // 2.33 минуты
-//     console.log('Completed task5')
-//   }
-// }
-
 // Функции задач (пример)
-const TASK_FUNCTIONS = {
+const TASK_FUNCTIONS: Record<string, () => Promise<void>> = {
   processPayments: async () => {
     console.log('Processing payments...')
     await new Promise(resolve => setTimeout(resolve, 120000)) // 2 минуты работы
@@ -50,8 +22,19 @@ const TASK_FUNCTIONS = {
   generateReports: async () => {
     console.log('Generating reports...')
     await new Promise(resolve => setTimeout(resolve, 180000)) // 3 минуты работы
+  },
+  databaseBackup: async () => {
+    console.log('Backup database...')
+    await new Promise(resolve => setTimeout(resolve, 200000)) // 3.3
+  },
+  calculateFee: async () => {
+    console.log('Calculate fee...')
+    await new Promise(resolve => setTimeout(resolve, 280000)) // 4
+  },
+  clearMiners: async () => {
+    console.log('Clear miners...')
+    await new Promise(resolve => setTimeout(resolve, 380000)) // 4
   }
-  // ... другие задачи
 }
 
 export default class DistributedScheduler {
@@ -60,6 +43,39 @@ export default class DistributedScheduler {
 
   constructor() {
     this.serverId = `srv-${require('os').hostname()}-${process.pid}`
+  }
+
+  private createTaskData(id: number, name: string, interval: string, functionName: string) {
+    return {
+      id,
+      name,
+      interval,
+      functionName,
+      nextRun: new Date(),
+      lastRun: null,
+      lockedUntil: null,
+      lockedBy: null,
+      updatedAt: null
+    }
+  }
+
+  public async initializeTasks(): Promise<void> {
+    // Создаем задачи при первом запуске
+    const count = await Task.count()
+    if (count === 0) {
+      await sequelize.transaction(async transaction => {
+        await Task.bulkCreate(
+          [
+            this.createTaskData(1, 'Task 1', '*/5 * * * *', TASK_FUNCTIONS.processPayments.name),
+            this.createTaskData(2, 'Task 2', '*/7 * * * *', TASK_FUNCTIONS.generateReports.name),
+            this.createTaskData(3, 'Task 3', '*/10 * * * *', TASK_FUNCTIONS.databaseBackup.name),
+            this.createTaskData(4, 'Task 4', '*/12 * * * *', TASK_FUNCTIONS.calculateFee.name),
+            this.createTaskData(5, 'Task 5', '*/15 * * * *', TASK_FUNCTIONS.clearMiners.name)
+          ],
+          { transaction: transaction }
+        )
+      })
+    }
   }
 
   public async start(): Promise<void> {
@@ -74,7 +90,7 @@ export default class DistributedScheduler {
         try {
           await this.tryRunTask()
         } catch (error) {
-          console.error('Scheduler error:', error)
+          console.error('No tasks available to run scheduler')
         }
       }
     })()
@@ -101,13 +117,12 @@ export default class DistributedScheduler {
         return
       }
 
-      await transaction.commit()
-
       // 2. Выполняем задачу
-      await this.executeTask(task)
+      await this.executeTask(task, transaction)
+      await transaction.commit()
     } catch (error) {
       await transaction.rollback()
-      throw error
+      console.info('No tasks available to run scheduler')
     }
   }
 
@@ -127,104 +142,91 @@ export default class DistributedScheduler {
       }
     )
 
+    const lockExpire = new Date(now.getTime() + SCHEDULER_CONFIG.lockDuration)
+    if (isNaN(lockExpire.getTime())) {
+      throw new Error('Invalid lock expire date')
+    }
+
     // Пытаемся захватить новую задачу
-    const [task] = await sequelize.query<Task>(
-      `
-          WITH updated_task AS (
-          UPDATE tasks
-          SET
-              lockedUntil = :lockExpire,
-              lockedBy = :serverId,
-              nextRun = :nextRun
-          WHERE id = (
-              SELECT id FROM tasks
-              WHERE nextRun <= :now
-                AND (lockedUntil IS NULL OR lockedUntil <= :now)
-              ORDER BY nextRun
-              LIMIT 1
-              FOR UPDATE SKIP LOCKED
-                      )
-                      RETURNING *;
-      `,
-      {
-        replacements: {
-          now,
-          serverId: this.serverId,
-          lockExpire: new Date(now.getTime() + SCHEDULER_CONFIG.lockDuration),
-          nextRun: this.calculateNextRun('*/5 * * * *', now) // Пример для интервала
-        },
-        transaction,
-        model: Task,
-        mapToModel: true
-      }
-    )
-
-    // @ts-ignore
-    return task[0] || null
-  }
-
-  private async executeTask(task: Task): Promise<void> {
-    const taskFunction = TASK_FUNCTIONS[task.functionName as keyof typeof TASK_FUNCTIONS]
-
-    if (typeof taskFunction !== 'function') {
-      throw new Error(`Unknown task function: ${task.functionName}`)
-    } // ТС не может гарантировать что вызов соответствует ключу объекта, поэтому пришлось сделать вот так
-    // Можно было сделать вот так, TASK_FUNCTIONS[task.functionName as keyof typeof TASK_FUNCTIONS], но если всё же оно н соответствует?
-
-    // Выполняем задачу
-    await taskFunction()
-
-    const historyRecord = await TaskHistory.create({
-      taskId: task.id,
-      serverId: this.serverId,
-      startTime: new Date(),
-      status: 'running',
-      // @ts-ignore
-      functionName: TASK_FUNCTIONS[task.functionName]()
+    const task = await Task.findOne({
+      where: {
+        nextRun: { [Op.lte]: now },
+        [Op.or]: [
+          { lockedUntil: null },
+          { lockedUntil: { [Op.lte]: now } }
+        ]
+      },
+      order: [['next_run', 'ASC']],
+      lock: true,
+      skipLocked: true,
+      transaction
     })
 
-    try {
-      console.log(`[${this.serverId}] Starting task ${task.name}`)
 
-      // Выполняем задачу
+    if (task) {
+      // Обновить поля блокировки и вернуть обновлённую задачу
+      const nextRun = this.calculateNextRun(task.interval, now)
+      await task.update(
+        {
+          id: task.id,
+          lockedUntil: lockExpire,
+          lockedBy: this.serverId,
+          nextRun: nextRun
+        },
+        { transaction }
+      )
+      return task
+    }
+
+    return null
+  }
+
+  async executeTask(task: Task, transaction: Transaction): Promise<void> {
+    try {
+      // 1. Создаем запись в истории (с транзакцией)
+      const historyRecord = await TaskHistory.create(
+        {
+          taskId: task.id,
+          serverId: this.serverId,
+          startTime: new Date(),
+          status: 'running',
+          functionName: task.functionName // Исправлено: task.functionName вместо taskFunction.name
+        },
+        { transaction }
+      )
+
+      // 2. Получаем функцию задачи
+      const taskFunction = TASK_FUNCTIONS[task.functionName]
+      if (!taskFunction) {
+        throw new Error(`Task function ${task.functionName} not found`)
+      }
+
+      // 3. Выполняем задачу
+      console.log(`Starting task ${task.functionName}`)
       await taskFunction()
 
-      // Успешное завершение
-      await sequelize.transaction(async (t: any) => {
-        await Task.update(
-          {
-            lastRun: new Date(),
-            lockedUntil: null,
-            lockedBy: null
-          },
-          {
-            where: { id: task.id },
-            transaction: t
-          }
-        )
-
-        await historyRecord.markAsCompleted()
-      })
-
-      console.log(`[${this.serverId}] Completed task ${task.name}`)
+      // 4. Обновляем историю при успехе
+      await historyRecord.update(
+        {
+          endTime: new Date(),
+          status: 'completed'
+        },
+        { transaction }
+      )
     } catch (error) {
-      console.error(`[${this.serverId}] Task failed:`, error)
-
-      await sequelize.transaction(async (t: any) => {
-        await Task.update(
-          {
-            lockedUntil: null,
-            lockedBy: null
-          },
-          {
-            where: { id: task.id },
-            transaction: t
-          }
-        )
-
-        // @ts-ignore
-        await historyRecord.markAsFailed(error)
-      })
+      // 5. Обновляем историю при ошибке
+      await TaskHistory.update(
+        {
+          endTime: new Date(),
+          status: 'failed',
+          error: 'Timeout error'
+        },
+        {
+          where: { taskId: task.id },
+          transaction
+        }
+      )
+      throw error
     }
   }
 
@@ -264,10 +266,13 @@ export default class DistributedScheduler {
   }
 
   private calculateNextRun(cronExpression: string, fromDate: Date): Date {
-    // Упрощенная реализация. В проде я бы использовал cron-parser
-    // Учитывая что его использовать нельзя конечно
-    const [_, minutes] = cronExpression.split(' ')
-    const interval = parseInt(minutes.replace('*/', ''), 10)
-    return new Date(fromDate.getTime() + interval * 60000)
+    try {
+      const cron = CronExpressionParser.parse(cronExpression, { currentDate: fromDate })
+
+      return cron.next().toDate()
+    } catch (error) {
+      console.error('Invalid cron expression:', cronExpression)
+      throw new Error('Invalid cron expression')
+    }
   }
 }

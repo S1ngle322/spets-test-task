@@ -9,6 +9,8 @@ interface TaskAttributes {
   lockedUntil: Date | null // Вместо isRunning
   lockedBy: string | null // Вместо serverId
   functionName: string
+  updatedAt: Date | null
+  createdAt: Date | null
 }
 
 export default class Task extends Model<TaskAttributes> implements TaskAttributes {
@@ -20,6 +22,8 @@ export default class Task extends Model<TaskAttributes> implements TaskAttribute
   public lockedUntil!: Date | null
   public lockedBy!: string | null
   public functionName!: string
+  public updatedAt!: Date | null
+  public createdAt!: Date | null
 
   public static initModel(sequelize: Sequelize): void {
     this.init(
@@ -29,23 +33,50 @@ export default class Task extends Model<TaskAttributes> implements TaskAttribute
           autoIncrement: true,
           primaryKey: true
         },
-        name: DataTypes.STRING,
-        interval: DataTypes.STRING,
-        lastRun: DataTypes.DATE,
+        name: {
+          type: DataTypes.STRING,
+          field: 'name'
+        },
+        interval: {
+          type: DataTypes.STRING,
+          field: 'interval'
+        },
+        lastRun: {
+          type: DataTypes.DATE,
+          field: 'last_run'
+        },
         nextRun: {
           type: DataTypes.DATE,
-          allowNull: false
+          allowNull: false,
+          field: 'next_run'
         },
-        lockedUntil: DataTypes.DATE,
-        lockedBy: DataTypes.STRING,
-        functionName: DataTypes.STRING
+        lockedUntil: {
+          type: DataTypes.DATE,
+          field: 'locked_until'
+        },
+        lockedBy: {
+          type: DataTypes.STRING,
+          field: 'locked_by'
+        },
+        functionName: {
+          type: DataTypes.STRING,
+          field: 'function_name'
+        },
+        createdAt: {
+          type: DataTypes.DATE,
+          field: 'created_at'
+        },
+        updatedAt: {
+          type: DataTypes.DATE,
+          field: 'updated_at'
+        }
       },
       {
         sequelize,
         modelName: 'task',
         indexes: [
           {
-            fields: ['nextRun', 'lockedUntil'],
+            fields: ['next_run', 'locked_until'],
             where: { lockedUntil: null }
           }
         ]

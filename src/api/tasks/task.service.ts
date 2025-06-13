@@ -9,7 +9,7 @@ class TaskService {
       include: [
         {
           model: TaskHistory,
-          as: 'history',
+          as: 'taskHistories',
           required: false,
           where: {
             endTime: null

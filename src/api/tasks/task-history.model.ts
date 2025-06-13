@@ -50,23 +50,28 @@ export default class TaskHistory
           references: {
             model: 'tasks',
             key: 'id'
-          }
+          },
+          field: 'task_id'
         },
         serverId: {
           type: DataTypes.STRING,
-          allowNull: false
+          allowNull: false,
+          field: 'server_id'
         },
         functionName: {
           type: DataTypes.STRING,
-          allowNull: false
+          allowNull: false,
+          field: 'function_name'
         },
         startTime: {
           type: DataTypes.DATE,
-          allowNull: false
+          allowNull: false,
+          field: 'start_time'
         },
         endTime: {
           type: DataTypes.DATE,
-          allowNull: true
+          allowNull: true,
+          field: 'end_time'
         },
         status: {
           type: DataTypes.ENUM('pending', 'running', 'completed', 'failed', 'timeout'),
@@ -80,7 +85,18 @@ export default class TaskHistory
         durationMs: {
           type: DataTypes.INTEGER,
           allowNull: true,
-          comment: 'Duration in milliseconds'
+          comment: 'Duration in milliseconds',
+          field: 'duration_ms'
+        },
+        createdAt: {
+          type: DataTypes.DATE,
+          allowNull: false,
+          field: 'created_at'
+        },
+        updatedAt: {
+          type: DataTypes.DATE,
+          allowNull: false,
+          field: 'updated_at'
         }
       },
       {
@@ -91,16 +107,16 @@ export default class TaskHistory
         paranoid: false,
         indexes: [
           {
-            fields: ['taskId']
+            fields: ['task_id']
           },
           {
             fields: ['status']
           },
           {
-            fields: ['serverId']
+            fields: ['server_id']
           },
           {
-            fields: ['createdAt']
+            fields: ['created_at']
           }
         ]
       }
